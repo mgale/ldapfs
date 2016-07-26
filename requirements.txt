@@ -1,0 +1,6 @@
+pyopenssl
+ndg-httpsclient
+pyasn1
+fusepy
+python-ldap
+pyyaml

@@ -1,0 +1,9 @@
+Setup:
+======
+
+sudo apt-get install python-dev python-virtualenv libffi-dev libssl-dev libfuse2
+
+virtualenv --distribute env
+source ./env/bin/activate
+pip install -r requirements.txt
+
