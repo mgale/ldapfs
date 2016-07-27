@@ -37,4 +37,4 @@ The above example causes the password to be available in the output of the ps co
 ```
 
 This approach will read the password from a file, the password must be the last line in the file and the only
-text on the line.
+text on that line.
