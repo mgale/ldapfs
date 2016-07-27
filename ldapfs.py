@@ -183,8 +183,8 @@ class LdapFS(LoggingMixIn, Operations):
 
     def _create_stat_structure(self, ldap_result):
         '''
-        @param ldap_result is a tuple consisting of
-        the dn and attrs
+        @param ldap_result is a dict consisting of
+        attrs and xattrs
         '''
 
         ldap_stat_time_map = {
