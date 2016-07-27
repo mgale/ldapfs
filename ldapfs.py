@@ -28,7 +28,10 @@ def parse_options():
 
     group1 = parser.add_argument_group('LDAP Options')
     group1.add_argument('-u', '--username', required=True)
-    group1.add_argument('-p', '--password', required=True)
+    group1.add_argument('-p', '--password', required=False)
+    group1.add_argument('--passwordfile', required=False,
+                        help="Load password from file")
+
     group1.add_argument('--host', required=True,
                         help="LDAP server hostname or IP address")
 
@@ -39,8 +42,12 @@ def parse_options():
     group1.add_argument('--no-verify-cert', action='store_true', dest='disable_verify_cert',
                         help="Disable SSL certificate verification")
 
-    group2 = parser.add_argument_group('Mount Options')
-    group2.add_argument('-m', '--mountpoint', required=True, help="Local mount point")
+    group2 = parser.add_argument_group('Performance tweaks')
+    group2.add_argument('--cache', required=False, default=300,
+                        help="How long to cache ldap data, default 300 seconds")
+
+    group3 = parser.add_argument_group('Mount Options')
+    group3.add_argument('-m', '--mountpoint', required=True, help="Local mount point")
 
     return parser.parse_args()
 
@@ -88,7 +95,7 @@ class LdapFS(LoggingMixIn, Operations):
         self.ldap_url = "%s://%s:%s" % (ldap_protocol, options.host, options.port)
 
         self.ldap = None
-        self.ldap_cache = 300
+        self.ldap_cache = options.cache
 
         self.uid = os.getuid()
         self.gid = os.getgid()
@@ -384,4 +391,8 @@ if __name__ == '__main__':
     log = log_setup(options.verbose, options.debug)
 
     log.info("Process Started")
+
+    with open(options.passwordfile, 'r') as pfile:
+        my_password = pfile.readlines()[-1]
+        options.password = my_password.strip()
     fuse = FUSE(LdapFS(options), options.mountpoint, foreground=True, nothreads=False)
