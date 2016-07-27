@@ -18,21 +18,26 @@ import yaml
 
 from fuse import FUSE, FuseOSError, Operations, LoggingMixIn, fuse_get_context
 
+
 def parse_options():
 
     parser = argparse.ArgumentParser(description='General Usage:')
-    
-    parser.add_argument('-d', '--debug', action='store_true', default=False)
 
+    parser.add_argument('-d', '--debug', action='store_true', default=False)
     parser.add_argument('-v', '--verbose', action='store_true', default=False)
 
     group1 = parser.add_argument_group('LDAP Options')
     group1.add_argument('-u', '--username', required=True)
     group1.add_argument('-p', '--password', required=True)
-    group1.add_argument('--host', required=True, help="Ldap hostname or IP address")
-    group1.add_argument('--port', required=False, default=3269, help="Ldap port, defaults to 3269 which is the global catalog server SSL port")
+    group1.add_argument('--host', required=True,
+                        help="LDAP server hostname or IP address")
+
+    group1.add_argument('--port', required=False, default=3269,
+                        help="LDAP port, defaults to global catalog server SSL port 3269")
+
     group1.add_argument('--no-ssl', action='store_true', dest='disable_ssl', help="Disable SSL")
-    group1.add_argument('--no-verify-cert', action='store_true', dest='disable_verify_cert', help="Disable SSL certificate verification")
+    group1.add_argument('--no-verify-cert', action='store_true', dest='disable_verify_cert',
+                        help="Disable SSL certificate verification")
 
     group2 = parser.add_argument_group('Mount Options')
     group2.add_argument('-m', '--mountpoint', required=True, help="Local mount point")
@@ -45,10 +50,10 @@ def log_setup(verbose, debug):
     log_level = logging.INFO
     log_level_console = logging.WARNING
 
-    if verbose == True:
+    if verbose is True:
         log_level_console = logging.INFO
 
-    if debug == True:
+    if debug is True:
         log_level_console = logging.DEBUG
         log_level = logging.DEBUG
 
@@ -84,18 +89,18 @@ class LdapFS(LoggingMixIn, Operations):
 
         self.ldap = None
         self.ldap_cache = 300
-        
+
         self.uid = os.getuid()
         self.gid = os.getgid()
-      
-        #Here we store all atts for all files
+
+        # Here we store all atts for all files
         self.files = {}
-        #Here we store dir lookups
+        # Here we store dir lookups
         self.dir_list = {}
         now = time()
         self.mountpoint_stat = dict(st_mode=(S_IFDIR | 0o755), st_ctime=now,
-                               st_mtime=now, st_atime=now, st_nlink=2,
-                               st_uid=self.uid, st_gid=self.gid)
+                                    st_mtime=now, st_atime=now, st_nlink=2,
+                                    st_uid=self.uid, st_gid=self.gid)
 
         self._ldap_connect()
 
@@ -106,16 +111,16 @@ class LdapFS(LoggingMixIn, Operations):
             ldap.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_NEVER)
 
         log.debug("Initializing ldap connection: %s" % (self.ldap_url))
-        self.ldap = ldap.ldapobject.ReconnectLDAPObject(self.ldap_url, 
-            retry_max=5, retry_delay=30)
+        self.ldap = ldap.ldapobject.ReconnectLDAPObject(self.ldap_url,
+                                                        retry_max=5, retry_delay=30)
 
         self.ldap.set_option(ldap.OPT_REFERRALS, 0)
         log.debug("LDAP Current OPT_REFERRALS: %s" % (self.ldap.get_option(ldap.OPT_REFERRALS)))
 
         self.ldap.set_option(ldap.OPT_NETWORK_TIMEOUT, 5)
-        log.debug("LDAP Current OPT_NETWORK_TIMEOUT: %s" % (self.ldap.get_option(ldap.OPT_NETWORK_TIMEOUT)))
-        
-        
+        log.debug("LDAP Current OPT_NETWORK_TIMEOUT: %s" % (
+            self.ldap.get_option(ldap.OPT_NETWORK_TIMEOUT)))
+
         try:
             log.debug("Attempting to authenticate: %s via %s" % (self.ldap_url, self.username))
             self.ldap.simple_bind_s("%s" % (self.username), "%s" % (self.password))
@@ -203,8 +208,7 @@ class LdapFS(LoggingMixIn, Operations):
         epoch = datetime.datetime.utcfromtimestamp(0)
 
         for ldap_attr, stat_attr in ldap_stat_time_map.iteritems():
-            if ldap_result[1].has_key(ldap_attr):
-                #log.debug("Setting Attr: %s: %s :%s" % (dn, stat_attr,ldap_result[1][ldap_attr] ))
+            if ldap_attr in ldap_result[1]:
                 ad_time = ldap_result[1][ldap_attr][0]
                 my_file_stat[stat_attr] = self._convert_timestamp(epoch, ad_time)
 
@@ -214,7 +218,6 @@ class LdapFS(LoggingMixIn, Operations):
         my_file_stat['st_size'] = getsizeof(my_file_xstat)
 
         return my_file
-
 
     def destroy(self, path):
         self.ldap.unbind_s()
@@ -239,11 +242,11 @@ class LdapFS(LoggingMixIn, Operations):
 
         try:
             baseDN = self._create_base_dn(path)
-            result_id = self.ldap.search(baseDN,ldap.SCOPE_BASE,filterstr='(objectClass=*)')
+            result_id = self.ldap.search(baseDN, ldap.SCOPE_BASE, filterstr='(objectClass=*)')
         except ldap.LDAPError, e:
             log.debug("Unhandled Error: %s", e)
             raise FuseOSError(ENOENT)
-        
+
         try:
             attr_list = self._return_ldap_results(result_id)
         except ldap.INVALID_DN_SYNTAX, e:
@@ -252,7 +255,7 @@ class LdapFS(LoggingMixIn, Operations):
         except ldap.REFERRAL:
             log.debug("Referral found, skipping: %s" % (baseDN))
             return self.mountpoint_stat
-            #We return the default mount point options if we encounter a refferral
+            # We return the default mount point options if we encounter a refferral
 
         my_file = self._create_stat_structure(attr_list[0])
         self.files[path] = my_file
@@ -290,7 +293,7 @@ class LdapFS(LoggingMixIn, Operations):
 
         log.debug("Search path: %s : %s" % (path, fh))
 
-        dirs = ['.','..']
+        dirs = ['.', '..']
 
         try:
             if self.dir_list[path]['last_updated'] > (time() - self.ldap_cache):
@@ -301,9 +304,8 @@ class LdapFS(LoggingMixIn, Operations):
             log.debug("Cache miss: %s" % (path))
             self.dir_list[path] = {}
 
-
         if path == "/":
-            result_id = self.ldap.search('',ldap.SCOPE_BASE,filterstr='(objectClass=*)')
+            result_id = self.ldap.search('', ldap.SCOPE_BASE, filterstr='(objectClass=*)')
             dir_list = self._return_ldap_results(result_id)
 
             if len(dir_list) < 1:
@@ -316,7 +318,7 @@ class LdapFS(LoggingMixIn, Operations):
             baseDN = self._create_base_dn(path)
             log.debug("Searching BaseDN: %s" % (baseDN))
 
-            result_id = self.ldap.search(baseDN,ldap.SCOPE_ONELEVEL,filterstr='(objectClass=*)')
+            result_id = self.ldap.search(baseDN, ldap.SCOPE_ONELEVEL, filterstr='(objectClass=*)')
             dir_list = self._return_ldap_results(result_id)
 
             if len(dir_list) < 1:
@@ -324,14 +326,14 @@ class LdapFS(LoggingMixIn, Operations):
 
             strip_dn = ",%s" % (baseDN)
             for dn, dn_attrs in dir_list:
-                dirs.append(dn.replace(strip_dn,''))
+                dirs.append(dn.replace(strip_dn, ''))
 
         self.dir_list[path]['last_updated'] = time()
         self.dir_list[path]['children'] = dirs
 
         return dirs
 
-    #Disabling Write support
+    # Disabling Write support
     # def chmod(self, path, mode):
     #     return self.sftp.chmod(path, mode)
 
