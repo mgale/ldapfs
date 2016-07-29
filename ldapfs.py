@@ -392,7 +392,9 @@ if __name__ == '__main__':
 
     log.info("Process Started")
 
-    with open(options.passwordfile, 'r') as pfile:
-        my_password = pfile.readlines()[-1]
-        options.password = my_password.strip()
+    if options.passwordfile:
+        with open(options.passwordfile, 'r') as pfile:
+            my_password = pfile.readlines()[-1]
+            options.password = my_password
+    options.password = options.password.strip()
     fuse = FUSE(LdapFS(options), options.mountpoint, foreground=True, nothreads=False)
