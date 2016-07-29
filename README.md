@@ -3,7 +3,7 @@
 LDAPfs allows you to browse an Active Directory tree like a Linux file system.
 
 It uses the FUSE module to present the tree in a file system like interface, all Organization
-Unit's are represented as directorys. All Common Name entires are represented as files.
+Units are represented as directoriess. All Common Name entries are represented as files.
 
 ---
 
