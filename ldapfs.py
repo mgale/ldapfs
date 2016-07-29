@@ -7,16 +7,15 @@ import argparse
 import ldap
 import logging
 
-from collections import defaultdict
 from errno import ENOENT, EAGAIN
-from stat import S_IFDIR, S_IFLNK, S_IFREG
+from stat import S_IFDIR, S_IFREG
 from sys import exit, getsizeof
 from time import time
 import datetime
 import StringIO
 import yaml
 
-from fuse import FUSE, FuseOSError, Operations, LoggingMixIn, fuse_get_context
+from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
 
 
 def parse_options():
