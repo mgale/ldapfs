@@ -7,16 +7,15 @@ import argparse
 import ldap
 import logging
 
-from collections import defaultdict
 from errno import ENOENT, EAGAIN
-from stat import S_IFDIR, S_IFLNK, S_IFREG
+from stat import S_IFDIR, S_IFREG
 from sys import exit, getsizeof
 from time import time
 import datetime
 import StringIO
 import yaml
 
-from fuse import FUSE, FuseOSError, Operations, LoggingMixIn, fuse_get_context
+from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
 
 
 def parse_options():
@@ -395,7 +394,9 @@ if __name__ == '__main__':
 
     log.info("Process Started")
 
-    with open(options.passwordfile, 'r') as pfile:
-        my_password = pfile.readlines()[-1]
-        options.password = my_password.strip()
+    if options.passwordfile:
+        with open(options.passwordfile, 'r') as pfile:
+            my_password = pfile.readlines()[-1]
+            options.password = my_password
+    options.password = options.password.strip()
     fuse = FUSE(LdapFS(options), options.mountpoint, foreground=True, nothreads=False)
