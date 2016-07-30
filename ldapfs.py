@@ -114,7 +114,7 @@ class LdapFS(LoggingMixIn, Operations):
     def _ldap_connect(self):
 
         if self.disable_verify_cert:
-            log.info("Disabling certificate verification")
+            log.warning("Disabling certificate verification")
             ldap.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_NEVER)
 
         log.debug("Initializing ldap connection: %s" % (self.ldap_url))
@@ -131,16 +131,16 @@ class LdapFS(LoggingMixIn, Operations):
         try:
             log.debug("Attempting to authenticate: %s via %s" % (self.ldap_url, self.username))
             self.ldap.simple_bind_s("%s" % (self.username), "%s" % (self.password))
-            log.debug("Authenticated Successfully")
+            log.info("Authenticated Successfully")
         except ldap.SERVER_DOWN:
-            log.debug("Can't connect to server: %s" % (self.ldap_url))
-            log.debug("This can also happen if the server's certificate is invalid")
+            log.critical("Can't connect to server: %s" % (self.ldap_url))
+            log.critical("This can also happen if the server's certificate is invalid")
             exit(1)
         except ldap.INVALID_CREDENTIALS:
-            log.debug("I don't have access to this DC: %s" % (self.ldap_url))
+            log.critical("I don't have access to this DC: %s" % (self.ldap_url))
             exit(1)
         except ldap.LDAPError, e:
-            log.debug("Unknown Error: %s", e)
+            log.critical("Unknown Error: %s", e)
             exit(1)
 
     def _return_ldap_results(self, ldap_result_id):
@@ -222,7 +222,7 @@ class LdapFS(LoggingMixIn, Operations):
         for ldap_attr, ldap_val in ldap_result[1].iteritems():
             my_file_xstat[ldap_attr] = "%s" % (ldap_val)
 
-        my_file_stat['st_size'] = getsizeof(my_file_xstat)
+        my_file_stat['st_size'] = 5000000
 
         return my_file
 
@@ -251,16 +251,16 @@ class LdapFS(LoggingMixIn, Operations):
             baseDN = self._create_base_dn(path)
             result_id = self.ldap.search(baseDN, ldap.SCOPE_BASE, filterstr='(objectClass=*)')
         except ldap.LDAPError, e:
-            log.debug("Unhandled Error: %s", e)
+            log.critical("Unhandled Error: %s", e)
             raise FuseOSError(ENOENT)
 
         try:
             attr_list = self._return_ldap_results(result_id)
         except ldap.INVALID_DN_SYNTAX, e:
-            log.debug("Unhandled Error: %s", e)
+            log.warning("Unhandled Error: %s", e)
             raise FuseOSError(ENOENT)
         except ldap.REFERRAL:
-            log.debug("Referral found, skipping: %s" % (baseDN))
+            log.info("Referral found, skipping: %s" % (baseDN))
             return self.mountpoint_stat
             # We return the default mount point options if we encounter a refferral
 
@@ -333,7 +333,10 @@ class LdapFS(LoggingMixIn, Operations):
 
             strip_dn = ",%s" % (baseDN)
             for dn, dn_attrs in dir_list:
-                dirs.append(dn.replace(strip_dn, ''))
+                try:
+                    dirs.append(dn.replace(strip_dn, ''))
+                except:
+                    log.critical("Error adding: %s" % (dn))
 
         self.dir_list[path]['last_updated'] = time()
         self.dir_list[path]['children'] = dirs
