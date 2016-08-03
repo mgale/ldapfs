@@ -221,7 +221,11 @@ class LdapFS(LoggingMixIn, Operations):
         for ldap_attr, ldap_val in ldap_result[1].iteritems():
             my_file_xstat[ldap_attr] = "%s" % (ldap_val)
 
-        my_file_stat['st_size'] = 5000000
+        fileout = StringIO.StringIO()
+        yaml.dump(my_file_xstat, fileout, default_flow_style=False)
+
+        my_file_stat['st_size'] = fileout.tell()
+        my_file['fileout'] = fileout
 
         return my_file
 
@@ -287,12 +291,10 @@ class LdapFS(LoggingMixIn, Operations):
             return {}
 
     def read(self, path, size, offset, fh):
-        output = StringIO.StringIO()
-        yaml.dump(self.files[path]['xstat'], output, default_flow_style=False)
 
-        output.seek(offset, 0)
-        buf = output.read(size)
-        output.close()
+        my_file = self.files[path]['fileout']
+        my_file.seek(offset, 0)
+        buf = my_file.read(size)
         return buf
 
     def readdir(self, path, fh):
