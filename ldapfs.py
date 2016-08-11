@@ -14,6 +14,7 @@ from time import time
 import datetime
 import StringIO
 import yaml
+import collections
 
 from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
 
@@ -222,7 +223,7 @@ class LdapFS(LoggingMixIn, Operations):
             my_file_xstat[ldap_attr] = "%s" % (ldap_val)
 
         fileout = StringIO.StringIO()
-        yaml.dump(my_file_xstat, fileout, default_flow_style=False)
+        yaml.dump(sorted(my_file_xstat), fileout, default_flow_style=False)
 
         my_file_stat['st_size'] = fileout.tell()
         my_file['fileout'] = fileout
