@@ -43,7 +43,7 @@ def parse_options():
                         help="Disable SSL certificate verification")
 
     group2 = parser.add_argument_group('Performance tweaks')
-    group2.add_argument('--cache', required=False, default=300,
+    group2.add_argument('--cache', required=False, default=300, type=float,
                         help="How long to cache ldap data, default 300 seconds")
 
     group3 = parser.add_argument_group('Mount Options')
@@ -223,7 +223,7 @@ class LdapFS(LoggingMixIn, Operations):
             my_file_xstat[ldap_attr] = "%s" % (ldap_val)
 
         fileout = StringIO.StringIO()
-        yaml.dump(sorted(my_file_xstat), fileout, default_flow_style=False)
+        yaml.dump(my_file_xstat, fileout, default_flow_style=False)
 
         my_file_stat['st_size'] = fileout.tell()
         my_file['fileout'] = fileout
