@@ -4,3 +4,6 @@ pyasn1
 fusepy
 python-ldap
 pyyaml
+mockldap
+nose
+unittest2
