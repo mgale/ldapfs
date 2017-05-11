@@ -111,28 +111,32 @@ class LdapFS(LoggingMixIn, Operations):
 
         self.epoch = datetime.datetime.utcfromtimestamp(0)
 
-        self._ldap_connect()
+        self.ldap = self._ldap_connect()
 
     def _ldap_connect(self):
+        """
+        We wrap setting up the ldap connection because of the amount of work and
+        it makes it easier to handle reconnects on connection failure.
+        """
 
         if self.disable_verify_cert:
             log.warning("Disabling certificate verification")
             ldap.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_NEVER)
 
         log.debug("Initializing ldap connection: %s" % (self.ldap_url))
-        self.ldap = ldap.ldapobject.ReconnectLDAPObject(self.ldap_url,
+        ldap_conn = ldap.ldapobject.ReconnectLDAPObject(self.ldap_url,
                                                         retry_max=5, retry_delay=30)
 
-        self.ldap.set_option(ldap.OPT_REFERRALS, 0)
-        log.debug("LDAP Current OPT_REFERRALS: %s" % (self.ldap.get_option(ldap.OPT_REFERRALS)))
+        ldap_conn.set_option(ldap.OPT_REFERRALS, 0)
+        log.debug("LDAP Current OPT_REFERRALS: %s" % (ldap_conn.get_option(ldap.OPT_REFERRALS)))
 
-        self.ldap.set_option(ldap.OPT_NETWORK_TIMEOUT, 5)
+        ldap_conn.set_option(ldap.OPT_NETWORK_TIMEOUT, 5)
         log.debug("LDAP Current OPT_NETWORK_TIMEOUT: %s" % (
-            self.ldap.get_option(ldap.OPT_NETWORK_TIMEOUT)))
+            ldap_conn.get_option(ldap.OPT_NETWORK_TIMEOUT)))
 
         try:
             log.debug("Attempting to authenticate: %s via %s" % (self.ldap_url, self.username))
-            self.ldap.simple_bind_s("%s" % (self.username), "%s" % (self.password))
+            ldap_conn.simple_bind_s("%s" % (self.username), "%s" % (self.password))
             log.info("Authenticated Successfully")
         except ldap.SERVER_DOWN:
             log.critical("Can't connect to server: %s" % (self.ldap_url))
@@ -144,6 +148,8 @@ class LdapFS(LoggingMixIn, Operations):
         except ldap.LDAPError, e:
             log.critical("Unknown Error: %s", e)
             exit(1)
+
+        return ldap_conn
 
     def _return_ldap_results(self, ldap_result_id):
 
@@ -159,7 +165,7 @@ class LdapFS(LoggingMixIn, Operations):
                         data.append(rData[0])
             except ldap.SERVER_DOWN:
                 log.critical("Ldap server down or connection expired, will attempt reconnect")
-                self._ldap_connect()
+                self.ldap = self._ldap_connect()
                 raise FuseOSError(EAGAIN)
                 break
 
