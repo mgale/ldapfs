@@ -2,7 +2,7 @@
 
 from __future__ import print_function, absolute_import, division
 
-import os
+import sys, os
 import argparse
 import ldap
 import logging
@@ -19,7 +19,7 @@ import collections
 from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
 
 
-def parse_options():
+def parse_options(options):
 
     parser = argparse.ArgumentParser(description='General Usage:')
 
@@ -49,7 +49,7 @@ def parse_options():
     group3 = parser.add_argument_group('Mount Options')
     group3.add_argument('-m', '--mountpoint', required=True, help="Local mount point")
 
-    return parser.parse_args()
+    return parser.parse_args(options)
 
 
 def log_setup(verbose, debug):
@@ -108,6 +108,8 @@ class LdapFS(LoggingMixIn, Operations):
         self.mountpoint_stat = dict(st_mode=(S_IFDIR | 0o755), st_ctime=now,
                                     st_mtime=now, st_atime=now, st_nlink=2,
                                     st_uid=self.uid, st_gid=self.gid)
+
+        self.epoch = datetime.datetime.utcfromtimestamp(0)
 
         self._ldap_connect()
 
@@ -212,12 +214,10 @@ class LdapFS(LoggingMixIn, Operations):
         else:
             my_file_stat['st_mode'] = (S_IFDIR | 0o755)
 
-        epoch = datetime.datetime.utcfromtimestamp(0)
-
         for ldap_attr, stat_attr in ldap_stat_time_map.iteritems():
             if ldap_attr in ldap_result[1]:
                 ad_time = ldap_result[1][ldap_attr][0]
-                my_file_stat[stat_attr] = self._convert_timestamp(epoch, ad_time)
+                my_file_stat[stat_attr] = self._convert_timestamp(self.epoch, ad_time)
 
         for ldap_attr, ldap_val in ldap_result[1].iteritems():
             my_file_xstat[ldap_attr] = "%s" % (ldap_val)
@@ -392,7 +392,7 @@ class LdapFS(LoggingMixIn, Operations):
 
 if __name__ == '__main__':
 
-    options = parse_options()
+    options = parse_options(sys.argv[1:])
     log = log_setup(options.verbose, options.debug)
 
     log.info("Process Started")
