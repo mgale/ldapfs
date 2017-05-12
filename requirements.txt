@@ -7,3 +7,4 @@ pyyaml
 mockldap
 nose
 unittest2
+coverage
