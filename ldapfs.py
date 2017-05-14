@@ -2,7 +2,7 @@
 
 from __future__ import print_function, absolute_import, division
 
-import os
+import sys, os
 import argparse
 import ldap
 import logging
@@ -19,7 +19,7 @@ import collections
 from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
 
 
-def parse_options():
+def parse_options(options):
 
     parser = argparse.ArgumentParser(description='General Usage:')
 
@@ -49,7 +49,7 @@ def parse_options():
     group3 = parser.add_argument_group('Mount Options')
     group3.add_argument('-m', '--mountpoint', required=True, help="Local mount point")
 
-    return parser.parse_args()
+    return parser.parse_args(options)
 
 
 def log_setup(verbose, debug):
@@ -109,28 +109,34 @@ class LdapFS(LoggingMixIn, Operations):
                                     st_mtime=now, st_atime=now, st_nlink=2,
                                     st_uid=self.uid, st_gid=self.gid)
 
-        self._ldap_connect()
+        self.epoch = datetime.datetime.utcfromtimestamp(0)
+
+        self.ldap = self._ldap_connect()
 
     def _ldap_connect(self):
+        """
+        We wrap setting up the ldap connection because of the amount of work and
+        it makes it easier to handle reconnects on connection failure.
+        """
 
         if self.disable_verify_cert:
             log.warning("Disabling certificate verification")
             ldap.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_NEVER)
 
         log.debug("Initializing ldap connection: %s" % (self.ldap_url))
-        self.ldap = ldap.ldapobject.ReconnectLDAPObject(self.ldap_url,
+        ldap_conn = ldap.ldapobject.ReconnectLDAPObject(self.ldap_url,
                                                         retry_max=5, retry_delay=30)
 
-        self.ldap.set_option(ldap.OPT_REFERRALS, 0)
-        log.debug("LDAP Current OPT_REFERRALS: %s" % (self.ldap.get_option(ldap.OPT_REFERRALS)))
+        ldap_conn.set_option(ldap.OPT_REFERRALS, 0)
+        log.debug("LDAP Current OPT_REFERRALS: %s" % (ldap_conn.get_option(ldap.OPT_REFERRALS)))
 
-        self.ldap.set_option(ldap.OPT_NETWORK_TIMEOUT, 5)
+        ldap_conn.set_option(ldap.OPT_NETWORK_TIMEOUT, 5)
         log.debug("LDAP Current OPT_NETWORK_TIMEOUT: %s" % (
-            self.ldap.get_option(ldap.OPT_NETWORK_TIMEOUT)))
+            ldap_conn.get_option(ldap.OPT_NETWORK_TIMEOUT)))
 
         try:
             log.debug("Attempting to authenticate: %s via %s" % (self.ldap_url, self.username))
-            self.ldap.simple_bind_s("%s" % (self.username), "%s" % (self.password))
+            ldap_conn.simple_bind_s("%s" % (self.username), "%s" % (self.password))
             log.info("Authenticated Successfully")
         except ldap.SERVER_DOWN:
             log.critical("Can't connect to server: %s" % (self.ldap_url))
@@ -143,6 +149,8 @@ class LdapFS(LoggingMixIn, Operations):
             log.critical("Unknown Error: %s", e)
             exit(1)
 
+        return ldap_conn
+
     def _return_ldap_results(self, ldap_result_id):
 
         data = []
@@ -150,14 +158,16 @@ class LdapFS(LoggingMixIn, Operations):
         while 1:
             try:
                 rType, rData = self.ldap.result(ldap_result_id, 0)
-                if rData == []:
+                if rData == [] or rData is None:
                     return data
                 else:
-                    if rType == ldap.RES_SEARCH_ENTRY:
+                    #According to: https://www.python-ldap.org/doc/html/ldap.html#example
+                    #There are possible responses
+                    if rType in (ldap.RES_SEARCH_ENTRY, ldap.RES_SEARCH_RESULT):
                         data.append(rData[0])
             except ldap.SERVER_DOWN:
                 log.critical("Ldap server down or connection expired, will attempt reconnect")
-                self._ldap_connect()
+                self.ldap = self._ldap_connect()
                 raise FuseOSError(EAGAIN)
                 break
 
@@ -181,9 +191,28 @@ class LdapFS(LoggingMixIn, Operations):
 
         return ','.join(baseDN_elements)
 
+    def _create_file_object(self, body_dict):
+        """
+        Take a dictionry and return a file like object that contains
+        a yaml structure of the dictionary.
+
+        Pyyaml automatically orders the keys alphabetical
+
+        @param body_dict: A dictionary that should represent the files content
+
+        Returns a tuple, the fileobject and file size
+        """
+
+        file_body = StringIO.StringIO()
+        yaml.dump(body_dict, file_body, default_flow_style=False)
+
+        file_size = file_body.tell()
+
+        return file_body, file_size
+
     def _create_stat_structure(self, ldap_result):
         '''
-        @param ldap_result is a dict consisting of
+        @param ldap_result is a tuple consisting of
         attrs and xattrs
         '''
 
@@ -212,21 +241,15 @@ class LdapFS(LoggingMixIn, Operations):
         else:
             my_file_stat['st_mode'] = (S_IFDIR | 0o755)
 
-        epoch = datetime.datetime.utcfromtimestamp(0)
-
         for ldap_attr, stat_attr in ldap_stat_time_map.iteritems():
             if ldap_attr in ldap_result[1]:
                 ad_time = ldap_result[1][ldap_attr][0]
-                my_file_stat[stat_attr] = self._convert_timestamp(epoch, ad_time)
+                my_file_stat[stat_attr] = self._convert_timestamp(self.epoch, ad_time)
 
         for ldap_attr, ldap_val in ldap_result[1].iteritems():
             my_file_xstat[ldap_attr] = "%s" % (ldap_val)
 
-        fileout = StringIO.StringIO()
-        yaml.dump(my_file_xstat, fileout, default_flow_style=False)
-
-        my_file_stat['st_size'] = fileout.tell()
-        my_file['fileout'] = fileout
+        my_file['filebody'], my_file_stat['st_size'] = self._create_file_object(my_file_xstat)
 
         return my_file
 
@@ -293,7 +316,7 @@ class LdapFS(LoggingMixIn, Operations):
 
     def read(self, path, size, offset, fh):
 
-        my_file = self.files[path]['fileout']
+        my_file = self.files[path]['filebody']
         my_file.seek(offset, 0)
         buf = my_file.read(size)
         return buf
@@ -392,7 +415,7 @@ class LdapFS(LoggingMixIn, Operations):
 
 if __name__ == '__main__':
 
-    options = parse_options()
+    options = parse_options(sys.argv[1:])
     log = log_setup(options.verbose, options.debug)
 
     log.info("Process Started")
