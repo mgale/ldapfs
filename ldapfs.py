@@ -158,10 +158,12 @@ class LdapFS(LoggingMixIn, Operations):
         while 1:
             try:
                 rType, rData = self.ldap.result(ldap_result_id, 0)
-                if rData == []:
+                if rData == [] or rData is None:
                     return data
                 else:
-                    if rType == ldap.RES_SEARCH_ENTRY:
+                    #According to: https://www.python-ldap.org/doc/html/ldap.html#example
+                    #There are possible responses
+                    if rType in (ldap.RES_SEARCH_ENTRY, ldap.RES_SEARCH_RESULT):
                         data.append(rData[0])
             except ldap.SERVER_DOWN:
                 log.critical("Ldap server down or connection expired, will attempt reconnect")
@@ -189,9 +191,28 @@ class LdapFS(LoggingMixIn, Operations):
 
         return ','.join(baseDN_elements)
 
+    def _create_file_object(self, body_dict):
+        """
+        Take a dictionry and return a file like object that contains
+        a yaml structure of the dictionary.
+
+        Pyyaml automatically orders the keys alphabetical
+
+        @param body_dict: A dictionary that should represent the files content
+
+        Returns a tuple, the fileobject and file size
+        """
+
+        file_body = StringIO.StringIO()
+        yaml.dump(body_dict, file_body, default_flow_style=False)
+
+        file_size = file_body.tell()
+
+        return file_body, file_size
+
     def _create_stat_structure(self, ldap_result):
         '''
-        @param ldap_result is a dict consisting of
+        @param ldap_result is a tuple consisting of
         attrs and xattrs
         '''
 
@@ -228,11 +249,7 @@ class LdapFS(LoggingMixIn, Operations):
         for ldap_attr, ldap_val in ldap_result[1].iteritems():
             my_file_xstat[ldap_attr] = "%s" % (ldap_val)
 
-        fileout = StringIO.StringIO()
-        yaml.dump(my_file_xstat, fileout, default_flow_style=False)
-
-        my_file_stat['st_size'] = fileout.tell()
-        my_file['fileout'] = fileout
+        my_file['filebody'], my_file_stat['st_size'] = self._create_file_object(my_file_xstat)
 
         return my_file
 
@@ -299,7 +316,7 @@ class LdapFS(LoggingMixIn, Operations):
 
     def read(self, path, size, offset, fh):
 
-        my_file = self.files[path]['fileout']
+        my_file = self.files[path]['filebody']
         my_file.seek(offset, 0)
         buf = my_file.read(size)
         return buf
