@@ -23,6 +23,12 @@ Things to be aware of:
 getfattr -n whenChanged <filename>
 ```
 
+## Ldap Connection Information
+
+- By default all connections are ldaps unless --no-ssl is provided
+- The defeault port is the Global Catalog port 3269
+- We do not follow referrals
+
 
 ### Mount Example
 
