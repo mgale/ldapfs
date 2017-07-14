@@ -341,6 +341,7 @@ class LdapFS(LoggingMixIn, Operations):
             dir_list = self._return_ldap_results(result_id)
 
             if len(dir_list) < 1:
+                log.warning("Small dir list")
                 raise FuseOSError(EAGAIN)
 
             dirs.extend(dir_list[0][1]['namingContexts'])
@@ -354,11 +355,16 @@ class LdapFS(LoggingMixIn, Operations):
             dir_list = self._return_ldap_results(result_id)
 
             if len(dir_list) < 1:
+                log.warning("Small dir list")
                 raise FuseOSError(ENOENT)
 
             strip_dn = ",%s" % (baseDN)
             for dn, dn_attrs in dir_list:
+                if dn.find("/") > -1:
+                    log.critical("Invalid characters skipping: %s" % (dn))
+                    continue
                 try:
+                    log.debug("Adding %s" % (dn))
                     dirs.append(dn.replace(strip_dn, ''))
                 except:
                     log.critical("Error adding: %s" % (dn))
